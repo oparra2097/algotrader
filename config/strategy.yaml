@@ -1,0 +1,22 @@
+strategy:
+  name: donchian
+  symbol: ETH-USD
+  timeframe: 1d
+  entry_lookback: 20      # break above prior 20-day high to enter
+  exit_lookback: 10       # break below prior 10-day low to exit
+  atr_period: 14
+  atr_stop_multiplier: 2.0
+  trend_filter_ma: 200    # only long above 200d MA; null to disable
+
+risk:
+  starting_equity: 1000
+  risk_per_trade: 0.01    # risk 1% of equity per trade
+  max_position_fraction: 1.0  # cap position notional at 100% of equity
+
+costs:
+  fee_per_side: 0.004     # Coinbase Advanced taker ~0.6%, maker ~0.4%
+  slippage: 0.0005        # 5 bps adverse fill
+
+backtest:
+  start: "2018-01-01"
+  end: null               # null = today
