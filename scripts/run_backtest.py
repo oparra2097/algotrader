@@ -50,17 +50,20 @@ def main(config_path: str = "config/strategy.yaml") -> None:
         atr_stop_multiplier=s["atr_stop_multiplier"],
         trend_filter_ma=s["trend_filter_ma"],
         starting_equity=r["starting_equity"],
-        risk_per_trade=r["risk_per_trade"],
         max_position_fraction=r["max_position_fraction"],
         fee_per_side=c["fee_per_side"],
         slippage=c["slippage"],
+        sizing_method=r.get("sizing_method", "vol_target"),
+        risk_per_trade=r.get("risk_per_trade", 0.01),
+        vol_target_daily=r.get("vol_target_daily", 0.01),
+        vol_lookback=r.get("vol_lookback", 20),
     )
 
     # buy-and-hold benchmark
     bh_return = float(df["close"].iloc[-1] / df["close"].iloc[0] - 1)
     bh_final = r["starting_equity"] * (1 + bh_return)
 
-    print("\n=== Backtest Results ===")
+    print(f"\n=== Backtest Results  ({r.get('sizing_method', 'vol_target')} sizing) ===")
     for k, v in result.stats.items():
         print(f"  {k:>16}: {fmt(k, v)}")
     print(f"\n  buy_and_hold_ret: {bh_return:.2%}   (final ${bh_final:,.2f})")

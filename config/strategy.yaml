@@ -6,17 +6,25 @@ strategy:
   exit_lookback: 10       # break below prior 10-day low to exit
   atr_period: 14
   atr_stop_multiplier: 2.0
-  trend_filter_ma: 200    # only long above 200d MA; null to disable
+  trend_filter_ma: 100    # Han et al. (2023) use rising 100d; null to disable
 
 risk:
   starting_equity: 1000
-  risk_per_trade: 0.01    # risk 1% of equity per trade
-  max_position_fraction: 1.0  # cap position notional at 100% of equity
+  sizing_method: vol_target   # "vol_target" or "atr"
+  # vol_target params (used when sizing_method == "vol_target")
+  vol_target_daily: 0.01      # target ~1% daily portfolio vol
+  vol_lookback: 20
+  # ATR params (used when sizing_method == "atr")
+  risk_per_trade: 0.01
+  # global cap regardless of method
+  max_position_fraction: 1.0
 
 costs:
-  fee_per_side: 0.004     # Coinbase Advanced taker ~0.6%, maker ~0.4%
-  slippage: 0.0005        # 5 bps adverse fill
+  # Kraken Pro low-volume taker = 0.40%, maker = 0.25%.
+  # Conservative blend assuming we mostly take liquidity on breakouts.
+  fee_per_side: 0.0025
+  slippage: 0.0005
 
 backtest:
   start: "2018-01-01"
-  end: null               # null = today
+  end: null

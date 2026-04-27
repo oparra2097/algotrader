@@ -1,4 +1,4 @@
-"""Event-driven daily-bar backtester with realistic fees, slippage, and ATR sizing."""
+"""Event-driven daily-bar backtester with fees, slippage, and pluggable sizing."""
 from __future__ import annotations
 
 from dataclasses import dataclass, asdict
@@ -6,7 +6,7 @@ from dataclasses import dataclass, asdict
 import numpy as np
 import pandas as pd
 
-from src.strategy.donchian import donchian_signals, atr
+from src.strategy.donchian import atr, donchian_signals, realized_vol
 
 
 @dataclass
@@ -42,13 +42,20 @@ def run_backtest(
     atr_stop_multiplier: float,
     trend_filter_ma: int | None,
     starting_equity: float,
-    risk_per_trade: float,
     max_position_fraction: float,
     fee_per_side: float,
     slippage: float,
+    sizing_method: str = "vol_target",
+    risk_per_trade: float = 0.01,
+    vol_target_daily: float = 0.01,
+    vol_lookback: int = 20,
 ) -> BacktestResult:
+    if sizing_method not in ("vol_target", "atr"):
+        raise ValueError(f"sizing_method must be 'vol_target' or 'atr', got {sizing_method!r}")
+
     sig = donchian_signals(df, entry_lookback, exit_lookback, trend_filter_ma)
     sig["atr"] = atr(df, atr_period)
+    sig["vol"] = realized_vol(df, vol_lookback)
 
     equity = starting_equity
     position = 0.0
@@ -120,18 +127,26 @@ def run_backtest(
                 raw_fill = max(row["entry_high"], row["open"])
                 fill_price = raw_fill * (1 + slippage)
                 stop_distance = row["atr"] * atr_stop_multiplier
-                if stop_distance <= 0:
-                    pass
-                else:
-                    risk_dollars = equity * risk_per_trade
-                    size = risk_dollars / stop_distance
-                    max_size = (equity * max_position_fraction) / fill_price
-                    size = min(size, max_size)
-                    if size > 0:
-                        entry_price = fill_price
-                        position = size
-                        stop_price = fill_price - stop_distance
-                        entry_date = date
+
+                size = 0.0
+                if stop_distance > 0:
+                    if sizing_method == "vol_target":
+                        # target a fixed % daily portfolio vol; scale notional by 1/realized_vol
+                        if not pd.isna(row["vol"]) and row["vol"] > 0:
+                            target_dollars = (vol_target_daily / row["vol"]) * equity
+                            target_dollars = min(target_dollars, equity * max_position_fraction)
+                            size = target_dollars / fill_price
+                    else:  # atr
+                        risk_dollars = equity * risk_per_trade
+                        size = risk_dollars / stop_distance
+                        max_size = (equity * max_position_fraction) / fill_price
+                        size = min(size, max_size)
+
+                if size > 0:
+                    entry_price = fill_price
+                    position = size
+                    stop_price = fill_price - stop_distance
+                    entry_date = date
 
         # ---- mark-to-market equity ----
         if position > 0:

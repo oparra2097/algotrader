@@ -47,34 +47,28 @@ def main() -> None:
     df = synthetic_ohlc()
     print(f"synthetic bars: {len(df)}  start={df['close'].iloc[0]:.2f}  end={df['close'].iloc[-1]:.2f}")
 
-    res = run_backtest(
-        df,
+    common = dict(
         entry_lookback=20,
         exit_lookback=10,
         atr_period=14,
         atr_stop_multiplier=2.0,
-        trend_filter_ma=200,
+        trend_filter_ma=100,
         starting_equity=1000.0,
-        risk_per_trade=0.01,
         max_position_fraction=1.0,
-        fee_per_side=0.004,
+        fee_per_side=0.0025,
         slippage=0.0005,
     )
 
-    print("\nstats:")
-    for k, v in res.stats.items():
-        print(f"  {k}: {v}")
-    print(f"\nfirst 3 trades:")
-    for t in res.trades[:3]:
-        print(f"  {t.entry_date.date()} -> {t.exit_date.date()}  "
-              f"entry={t.entry_price:.2f} exit={t.exit_price:.2f} "
-              f"pnl={t.pnl:.2f} reason={t.reason}")
+    for method in ("vol_target", "atr"):
+        res = run_backtest(df, sizing_method=method, **common)
+        print(f"\n--- {method} sizing ---")
+        for k, v in res.stats.items():
+            print(f"  {k}: {v}")
+        assert res.equity_curve.index.is_monotonic_increasing
+        assert (res.equity_curve > 0).all(), f"{method}: equity went non-positive"
+        assert res.stats["n_trades"] > 0, f"{method}: no trades produced"
 
-    # invariants
-    assert res.equity_curve.index.is_monotonic_increasing
-    assert (res.equity_curve > 0).all(), "equity went non-positive"
-    assert res.stats["n_trades"] > 0, "no trades produced"
-    print("\nOK: engine ran end-to-end without errors.")
+    print("\nOK: both sizing modes ran end-to-end without errors.")
 
 
 if __name__ == "__main__":

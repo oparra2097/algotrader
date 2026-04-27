@@ -1,6 +1,7 @@
-"""Donchian channel breakout signals + ATR for stop sizing."""
+"""Donchian channel breakout signals, ATR, and realized vol for sizing."""
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 
 
@@ -25,3 +26,9 @@ def atr(df: pd.DataFrame, period: int) -> pd.Series:
     low_close = (df["low"] - df["close"].shift()).abs()
     tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
     return tr.rolling(period).mean()
+
+
+def realized_vol(df: pd.DataFrame, period: int) -> pd.Series:
+    """Rolling stdev of daily log returns. Used for vol-target sizing."""
+    log_ret = np.log(df["close"] / df["close"].shift(1))
+    return log_ret.rolling(period).std()
