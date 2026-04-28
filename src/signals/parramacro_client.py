@@ -195,12 +195,20 @@ class ParraMacroClient:
         max_hours: float,
         health: dict[str, Any] | None = None,
     ) -> datetime:
-        """Raise StaleDataError if a named series is too old."""
+        """Raise StaleDataError if a named series is too old or unavailable.
+
+        Per the parramacro v1 contract, freshest_data values are
+        `string | null` - null means the underlying product has no
+        cached run yet. Treat that as stale rather than crashing.
+        """
         h = health or self.health()
         freshest = h.get("freshest_data", {})
         if series not in freshest:
             raise StaleDataError(f"no freshness info for {series!r} in /health")
-        as_of = self.parse_iso(freshest[series])
+        ts = freshest[series]
+        if ts is None:
+            raise StaleDataError(f"{series} has no cached data (freshest_data is null)")
+        as_of = self.parse_iso(ts)
         age_h = (datetime.now(timezone.utc) - as_of).total_seconds() / 3600
         if age_h > max_hours:
             raise StaleDataError(

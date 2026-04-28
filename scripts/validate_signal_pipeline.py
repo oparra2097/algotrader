@@ -55,9 +55,18 @@ def start_mock(spot: float) -> subprocess.Popen:
                 return p
         except Exception:
             pass
+        if p.poll() is not None:
+            # subprocess already exited - dump its stderr so we can see why
+            err = (p.stderr.read() or b"").decode(errors="replace")
+            out = (p.stdout.read() or b"").decode(errors="replace")
+            raise RuntimeError(
+                f"mock server exited with code {p.returncode}.\n"
+                f"--- stderr ---\n{err}\n--- stdout ---\n{out}"
+            )
         time.sleep(0.1)
+    err = (p.stderr.read(2048) or b"").decode(errors="replace") if p.stderr else ""
     p.terminate()
-    raise RuntimeError("mock server failed to start")
+    raise RuntimeError(f"mock server failed to start within 6s. stderr:\n{err}")
 
 
 def run_bot() -> str:
