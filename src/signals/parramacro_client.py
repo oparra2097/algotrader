@@ -59,7 +59,19 @@ class ParraMacroClient:
         last_err: Exception | None = None
         for attempt in range(self.max_retries + 1):
             try:
-                r = self._session.get(url, params=params, timeout=self.timeout)
+                # Never follow redirects: requests strips Authorization on
+                # cross-origin redirects (e.g. bare->www), which surfaces as
+                # a confusing 401. Surface the redirect target instead so the
+                # caller can fix PARRAMACRO_BASE_URL.
+                r = self._session.get(url, params=params, timeout=self.timeout,
+                                      allow_redirects=False)
+                if r.status_code in (301, 302, 307, 308):
+                    target = r.headers.get("Location", "<no Location header>")
+                    raise ParraMacroError(
+                        f"{r.status_code} redirect on {path} -> {target}. "
+                        f"Set PARRAMACRO_BASE_URL to the canonical host "
+                        f"(likely the one in the Location header)."
+                    )
                 if 200 <= r.status_code < 300:
                     return r.json()
                 if r.status_code in (401, 403):
