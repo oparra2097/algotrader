@@ -2,36 +2,40 @@ strategy:
   name: orb
   opening_range_minutes: 5      # use first 5-min bar as the OR (Zarattini et al. 2024)
   stop_at_or_opposite: true     # stop = other side of opening range
-  target_r_multiple: 10.0       # take profit at 10R, else flatten at close
+  target_r_multiple: 3.0        # take profit at 3R, else flatten at close
   flatten_minute_before_close: 5  # flatten N minutes before 16:00 ET
   long_only: false              # allow shorts when OR breaks down
-  # universe of symbols to consider each day
+  # ORB is a single-name volatility play. ETFs (SPY/QQQ) have ranges
+  # too tight for the strategy and consistently lose money. Universe
+  # below biases toward names with documented big intraday moves.
   universe:
-    - SPY
-    - QQQ
-    - AAPL
     - TSLA
     - NVDA
     - AMD
+    - COIN
+    - MSTR
+    - PLTR
+    - MARA
+    - RIVN
+    - SOFI
+    - AFRM
+    - GME
     - VG
 
 filter:
-  # Only trade names with elevated premarket volume (Zarattini "stocks-in-play").
-  # Set relvol_min: 0.0 to disable the filter and trade every name every day
-  # (expected to lose money - the literature edge is conditional on this filter).
-  relvol_min: 1.5
+  relvol_min: 2.0               # tighter "stocks-in-play" gate
   relvol_lookback_days: 14
-  top_n_per_day: null           # null = no extra cap beyond max_concurrent_positions
+  top_n_per_day: null
 
 risk:
   starting_equity: 1000
-  risk_per_trade: 0.01          # 1% of equity risked per trade
+  risk_per_trade: 0.01
   max_concurrent_positions: 2
-  max_position_fraction: 0.5    # cap any single position at 50% of equity
+  max_position_fraction: 0.5
 
 costs:
-  fee_per_side: 0.0             # Alpaca commission-free
-  slippage: 0.0005              # ~5 bps adverse fill on entries and exits
+  fee_per_side: 0.0
+  slippage: 0.0005
 
 backtest:
   start: "2024-01-01"
