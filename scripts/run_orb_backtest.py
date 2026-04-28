@@ -36,6 +36,7 @@ def main(config_path: str = "config/orb.yaml") -> None:
     r = cfg["risk"]
     c = cfg["costs"]
     b = cfg["backtest"]
+    f = cfg.get("filter", {})
 
     print(f"Fetching {len(s['universe'])} symbols  {b['start']} -> {b['end'] or 'today'}  ({b['timeframe']})")
     bars = fetch_universe(s["universe"], b["start"], b["end"], b["timeframe"])
@@ -57,6 +58,9 @@ def main(config_path: str = "config/orb.yaml") -> None:
         long_only=s["long_only"],
         fee_per_side=c["fee_per_side"],
         slippage=c["slippage"],
+        relvol_min=f.get("relvol_min", 1.5),
+        relvol_lookback_days=f.get("relvol_lookback_days", 14),
+        top_n_per_day=f.get("top_n_per_day"),
     )
 
     print("\n=== ORB Backtest Results ===")

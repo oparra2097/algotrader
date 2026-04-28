@@ -78,6 +78,7 @@ def main() -> None:
         long_only=False,
         fee_per_side=0.0,
         slippage=0.0005,
+        relvol_min=0.0,  # synthetic data has no premarket; skip the filter
     )
 
     print("\nstats:")

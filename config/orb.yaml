@@ -5,7 +5,7 @@ strategy:
   target_r_multiple: 10.0       # take profit at 10R, else flatten at close
   flatten_minute_before_close: 5  # flatten N minutes before 16:00 ET
   long_only: false              # allow shorts when OR breaks down
-  # universe of symbols to consider each day; later replaced by pre-market scanner
+  # universe of symbols to consider each day
   universe:
     - SPY
     - QQQ
@@ -15,18 +15,25 @@ strategy:
     - AMD
     - VG
 
+filter:
+  # Only trade names with elevated premarket volume (Zarattini "stocks-in-play").
+  # Set relvol_min: 0.0 to disable the filter and trade every name every day
+  # (expected to lose money - the literature edge is conditional on this filter).
+  relvol_min: 1.5
+  relvol_lookback_days: 14
+  top_n_per_day: null           # null = no extra cap beyond max_concurrent_positions
+
 risk:
   starting_equity: 1000
   risk_per_trade: 0.01          # 1% of equity risked per trade
-  max_concurrent_positions: 2   # cap total simultaneous trades
+  max_concurrent_positions: 2
   max_position_fraction: 0.5    # cap any single position at 50% of equity
 
 costs:
-  # Alpaca commissions are zero; model only spread/slippage
-  fee_per_side: 0.0
+  fee_per_side: 0.0             # Alpaca commission-free
   slippage: 0.0005              # ~5 bps adverse fill on entries and exits
 
 backtest:
-  start: "2024-01-01"           # Alpaca free tier intraday history is limited
+  start: "2024-01-01"
   end: null
   timeframe: "5Min"

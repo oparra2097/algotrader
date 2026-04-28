@@ -12,7 +12,12 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from src.strategy.orb import OpeningRange, opening_range, session_bars_by_day
+from src.strategy.orb import (
+    OpeningRange,
+    opening_range,
+    relative_volume_today,
+    session_bars_by_day,
+)
 
 
 @dataclass
@@ -35,6 +40,9 @@ class OrbBacktestResult:
     equity_curve: pd.Series
     trades: list[OrbTrade]
     stats: dict
+
+
+SESSION_CLOSE_ET = (16, 0)
 
 
 def _flatten_minute(close_h: int, close_m: int, minutes_before: int) -> tuple[int, int]:
@@ -64,7 +72,8 @@ def _simulate_session(
     if after_or.empty:
         return None
 
-    flatten_h, flatten_m = _flatten_minute(21, 0, flatten_minute_before_close)
+    close_h, close_m = SESSION_CLOSE_ET
+    flatten_h, flatten_m = _flatten_minute(close_h, close_m, flatten_minute_before_close)
     flatten_minutes = flatten_h * 60 + flatten_m
 
     side: str | None = None
@@ -183,29 +192,53 @@ def run_orb_backtest(
     long_only: bool,
     fee_per_side: float,
     slippage: float,
+    relvol_min: float = 1.5,
+    relvol_lookback_days: int = 14,
+    top_n_per_day: int | None = None,
 ) -> OrbBacktestResult:
-    # collect all sessions across symbols, ordered by date
-    sessions: list[tuple[pd.Timestamp, str, pd.DataFrame]] = []
-    for sym, bars in bars_by_symbol.items():
-        for date, sess in session_bars_by_day(bars).items():
-            sessions.append((pd.Timestamp(date), sym, sess))
-    sessions.sort(key=lambda x: (x[0], x[1]))
+    """Backtest ORB across multiple symbols.
 
+    relvol_min: only consider symbols whose premarket relative volume is
+    at least this multiple of their trailing average. Set to 0 to disable
+    the filter (not recommended; the literature edge is conditional on it).
+
+    top_n_per_day: cap on how many of the qualifying symbols to trade
+    each day, ranked by relative volume (highest first). None = no cap
+    beyond max_concurrent_positions.
+    """
+    # per-symbol per-date sessions, all in Eastern Time
+    sym_sessions: dict[str, dict[pd.Timestamp, pd.DataFrame]] = {
+        sym: session_bars_by_day(bars) for sym, bars in bars_by_symbol.items()
+    }
+
+    all_dates = sorted({d for d_map in sym_sessions.values() for d in d_map})
     equity = starting_equity
     trades: list[OrbTrade] = []
     daily_equity: dict[pd.Timestamp, float] = {}
 
-    by_date: dict[pd.Timestamp, list[tuple[str, pd.DataFrame]]] = {}
-    for d, s, b in sessions:
-        by_date.setdefault(d, []).append((s, b))
+    for date in all_dates:
+        # rank candidate symbols by today's relative premarket volume
+        candidates: list[tuple[float, str, pd.DataFrame]] = []
+        for sym, d_map in sym_sessions.items():
+            if date not in d_map:
+                continue
+            rv = relative_volume_today(
+                bars_by_symbol[sym], date, lookback_days=relvol_lookback_days
+            )
+            if rv is None:
+                # no premarket data for this name -> skip when filter is on
+                if relvol_min > 0:
+                    continue
+                rv = 0.0
+            if rv >= relvol_min:
+                candidates.append((rv, sym, d_map[date]))
 
-    for date in sorted(by_date):
-        day_sessions = by_date[date]
-        # cap concurrent positions per day
-        traded = 0
-        for sym, sess in day_sessions:
-            if traded >= max_concurrent_positions:
-                break
+        candidates.sort(key=lambda x: x[0], reverse=True)
+        if top_n_per_day is not None:
+            candidates = candidates[:top_n_per_day]
+        candidates = candidates[:max_concurrent_positions]
+
+        for _rv, sym, sess in candidates:
             risk_dollars = equity * risk_per_trade
             max_position_dollars = equity * max_position_fraction
             t = _simulate_session(
@@ -223,7 +256,6 @@ def run_orb_backtest(
             if t is not None:
                 equity += t.pnl
                 trades.append(t)
-                traded += 1
         daily_equity[date] = equity
 
     eq = pd.Series(daily_equity).sort_index()
