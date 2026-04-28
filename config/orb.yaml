@@ -1,0 +1,32 @@
+strategy:
+  name: orb
+  opening_range_minutes: 5      # use first 5-min bar as the OR (Zarattini et al. 2024)
+  stop_at_or_opposite: true     # stop = other side of opening range
+  target_r_multiple: 10.0       # take profit at 10R, else flatten at close
+  flatten_minute_before_close: 5  # flatten N minutes before 16:00 ET
+  long_only: false              # allow shorts when OR breaks down
+  # universe of symbols to consider each day; later replaced by pre-market scanner
+  universe:
+    - SPY
+    - QQQ
+    - AAPL
+    - TSLA
+    - NVDA
+    - AMD
+    - VG
+
+risk:
+  starting_equity: 1000
+  risk_per_trade: 0.01          # 1% of equity risked per trade
+  max_concurrent_positions: 2   # cap total simultaneous trades
+  max_position_fraction: 0.5    # cap any single position at 50% of equity
+
+costs:
+  # Alpaca commissions are zero; model only spread/slippage
+  fee_per_side: 0.0
+  slippage: 0.0005              # ~5 bps adverse fill on entries and exits
+
+backtest:
+  start: "2024-01-01"           # Alpaca free tier intraday history is limited
+  end: null
+  timeframe: "5Min"

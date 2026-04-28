@@ -5,6 +5,7 @@ __pycache__/
 venv/
 .env
 .env.local
+.env.*.local
 data/cache/
 results/
 *.png
