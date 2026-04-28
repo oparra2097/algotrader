@@ -6,7 +6,10 @@ Rule (gold-only starter):
                     (when long_only=False); stop = p97_5; target = p50
     otherwise   ->  no signal.
 
-Uses the nearest-quarter fan unless caller selects a different horizon.
+Consumes the *normalized* forecast shape from ParraMacroClient
+(see _normalize_commodity_forecast), so quarter keys are Q+N and
+quantile fields are p2_5/p10/p50/p90/p97_5 regardless of which
+ParraMacro path produced them.
 """
 from __future__ import annotations
 
@@ -21,9 +24,8 @@ def _pick_quarter(fan: list[dict[str, Any]], horizon: str) -> dict[str, Any]:
         raise ValueError("empty fan")
     if horizon == "nearest":
         return fan[0]
-    # match e.g. "2026Q3"
     for q in fan:
-        if q.get("quarter") == horizon:
+        if q.get("key") == horizon or q.get("label") == horizon:
             return q
     raise ValueError(f"horizon {horizon!r} not in fan")
 
@@ -37,10 +39,12 @@ def commodity_directional(
     stop_band: str = "p2_5",
     fan_horizon: str = "nearest",
     long_only: bool = True,
+    spot_override: float | None = None,
 ) -> TradeIdea | None:
     fan = forecast.get("fan", [])
-    spot = forecast.get("spot")
+    spot = forecast.get("spot") if spot_override is None else spot_override
     if spot is None:
+        # backtest path without injected spot - cannot make a decision
         return None
 
     q = _pick_quarter(fan, fan_horizon)
@@ -55,7 +59,7 @@ def commodity_directional(
 
     ts = datetime.now(timezone.utc)
     commodity = forecast.get("commodity", "?")
-    quarter = q.get("quarter", "?")
+    quarter_label = q.get("label", q.get("key", "?"))
 
     if spot < p10:
         return TradeIdea(
@@ -64,8 +68,9 @@ def commodity_directional(
             side="buy",
             timestamp=ts,
             rationale=(
-                f"{commodity} spot {spot:.2f} below {quarter} {long_threshold}={p10:.2f} "
-                f"-> long, stop {p2_5:.2f}, target p50 {p50:.2f}"
+                f"{commodity} spot {spot:.2f} below {quarter_label} "
+                f"{long_threshold}={p10:.2f} -> long, "
+                f"stop {p2_5:.2f}, target p50 {p50:.2f}"
             ),
             stop_price=float(p2_5),
             target_price=float(p50),
@@ -81,8 +86,8 @@ def commodity_directional(
                 side="close",
                 timestamp=ts,
                 rationale=(
-                    f"{commodity} spot {spot:.2f} above {quarter} p90={p90:.2f}; "
-                    f"long-only mode -> close any long"
+                    f"{commodity} spot {spot:.2f} above {quarter_label} "
+                    f"p90={p90:.2f}; long-only -> close any long"
                 ),
                 metadata={"commodity": commodity, "spot": spot, "quarter": q,
                           "rule": "above_p90_long_only_close"},
@@ -93,8 +98,8 @@ def commodity_directional(
             side="sell",
             timestamp=ts,
             rationale=(
-                f"{commodity} spot {spot:.2f} above {quarter} p90={p90:.2f} "
-                f"-> short, stop {p97_5:.2f}, target p50 {p50:.2f}"
+                f"{commodity} spot {spot:.2f} above {quarter_label} "
+                f"p90={p90:.2f} -> short, stop {p97_5:.2f}, target p50 {p50:.2f}"
             ),
             stop_price=float(p97_5),
             target_price=float(p50),

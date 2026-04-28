@@ -114,7 +114,7 @@ execution:
 policies:
   - name: gold_directional
     enabled: true
-    commodity: gold
+    commodity: Gold
     symbol: GLD
     fan_horizon: nearest
     long_threshold: p10

@@ -82,34 +82,103 @@ class ParraMacroClient:
     # ---- typed endpoints ----
 
     def health(self) -> dict[str, Any]:
-        """Return the platform health snapshot.
+        """GET /api/v1/health (public).
 
-        Expected shape:
+        Real shape:
             {"as_of": iso8601,
-             "freshest_data": {"commodities": iso8601, "georisk": iso8601, ...},
-             "stale": [list of stale series names]}
+             "freshest_data": {"georisk": iso8601|null,
+                               "commodities": iso8601|null,
+                               "macro_model": iso8601|null},
+             "stale": [list of stale series names],
+             "ok": bool}
         """
         return self._get("/api/v1/health")
 
     def commodity_forecast(self, commodity: str,
                            as_of: str | None = None) -> dict[str, Any]:
-        """GET /api/v1/forecasts?commodity=<>[&as_of=YYYY-MM-DD]
+        """GET /api/v1/commodities/forecasts?commodity=<>[&as_of=YYYY-MM-DD]
 
-        Expected shape:
-            {"as_of": iso8601, "commodity": "gold",
-             "spot": 2080.5, "spot_as_of": iso8601,
-             "fan": [{"quarter": "2026Q3", "p2_5": ..., "p10": ...,
-                      "p50": ..., "p90": ..., "p97_5": ...}, ...]}
+        Returns a normalized shape regardless of cached vs backtest path:
+            {"as_of": iso8601,
+             "as_of_param": "YYYY-MM-DD" or None,
+             "commodity": str (verbatim, e.g. "Gold"),
+             "spot": float | None,        # None on backtest path
+             "fan": [{"key": "Q+1", "label": "Q3 2026",
+                      "p2_5", "p10", "p50", "p90", "p97_5"}, ...],
+             "summary": {raw model summary dict}}
         """
         params: dict[str, Any] = {"commodity": commodity}
         if as_of:
             params["as_of"] = as_of
-        return self._get("/api/v1/forecasts", params=params)
+        raw = self._get("/api/v1/commodities/forecasts", params=params)
+        return self._normalize_commodity_forecast(raw)
+
+    def commodities_list(self) -> list[str]:
+        """GET /api/v1/commodities/list -> ['Aluminum', 'Brent Crude', ...]"""
+        data = self._get("/api/v1/commodities/list")
+        return data.get("commodities", []) if isinstance(data, dict) else data
 
     def hotspots(self, threshold: float = 70.0) -> list[dict[str, Any]]:
-        """GET /api/v1/hotspots?threshold=70 -> list of country dicts."""
-        data = self._get("/api/v1/hotspots", params={"threshold": threshold})
+        """GET /api/v1/georisk/hotspots?threshold=<>
+
+        Returns the hotspots array. Each item has:
+            {"country_code", "country_name", "composite", "base_score",
+             "news_score", "indicators": {...}, "headline_count",
+             "gdelt_event_count", "avg_tone", "updated_at", "trend": [...]}
+        Sorted desc by composite.
+        """
+        data = self._get("/api/v1/georisk/hotspots",
+                         params={"threshold": threshold})
         return data.get("hotspots", []) if isinstance(data, dict) else data
+
+    # ---- normalizers ----
+
+    @staticmethod
+    def _normalize_commodity_forecast(raw: dict[str, Any]) -> dict[str, Any]:
+        """Collapse cached and backtest payloads into one consistent shape."""
+        as_of_param = raw.get("as_of_param")
+        outer = raw.get("forecast", {})
+
+        if as_of_param:
+            # backtest path: forecast = {"Q+1": {...}, ...} directly
+            quarters = outer if isinstance(outer, dict) else {}
+            summary = raw.get("model_summary", {}) or {}
+            spot: float | None = None       # caller must supply historical spot
+        else:
+            # cached path: forecast.forecast is the anchored quarters dict
+            quarters = outer.get("forecast", {}) if isinstance(outer, dict) else {}
+            summary = outer.get("summary", {}) if isinstance(outer, dict) else {}
+            nowcast = outer.get("nowcast") if isinstance(outer, dict) else None
+            last_price = summary.get("last_price") if isinstance(summary, dict) else None
+            spot = nowcast if nowcast is not None else last_price
+
+        fan: list[dict[str, Any]] = []
+        # quarter keys are "Q+1", "Q+2", ...; sort numerically
+        def _qord(k: str) -> int:
+            try:
+                return int(k.split("+", 1)[1])
+            except Exception:
+                return 99
+        for k in sorted(quarters, key=_qord):
+            q = quarters[k] or {}
+            fan.append({
+                "key": k,
+                "label": q.get("label", k),
+                "p2_5": q.get("p2_5"),
+                "p10": q.get("p10"),
+                "p50": q.get("median"),     # real uses "median"
+                "p90": q.get("p90"),
+                "p97_5": q.get("p97_5"),
+            })
+
+        return {
+            "as_of": raw.get("as_of"),
+            "as_of_param": as_of_param,
+            "commodity": raw.get("commodity"),
+            "spot": float(spot) if spot is not None else None,
+            "fan": fan,
+            "summary": summary,
+        }
 
     # ---- helpers ----
 

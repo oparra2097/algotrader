@@ -28,10 +28,10 @@ execution:
 policies:
   - name: gold_directional
     enabled: true
-    commodity: gold
+    commodity: Gold                      # mixed-case, matches ParraMacro TICKERS
     symbol: GLD                          # ETF traded on Alpaca
-    fan_horizon: nearest                 # use nearest-quarter fan boundaries
+    fan_horizon: nearest                 # use Q+1 fan boundaries
     long_threshold: p10                  # enter long when spot < p10
-    exit_threshold: p50                  # exit when spot reaches p50
+    exit_threshold: p50                  # exit when spot reaches p50 (median)
     stop_band: p2_5                      # stop at p2_5
     long_only: true                      # safe default for $1k account
