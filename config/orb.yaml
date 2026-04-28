@@ -12,6 +12,7 @@ strategy:
     - TSLA
     - NVDA
     - AMD
+    - TSEM
     - COIN
     - MSTR
     - PLTR

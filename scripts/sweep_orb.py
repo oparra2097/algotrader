@@ -17,7 +17,7 @@ from src.data.alpaca import fetch_universe
 
 
 WIDE_UNIVERSE = [
-    "TSLA", "NVDA", "AMD", "COIN", "MSTR", "PLTR", "MARA",
+    "TSLA", "NVDA", "AMD", "TSEM", "COIN", "MSTR", "PLTR", "MARA",
     "RIVN", "SOFI", "AFRM", "GME", "VG",
 ]
 TSLA_ONLY = ["TSLA"]
