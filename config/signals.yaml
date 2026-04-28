@@ -1,0 +1,37 @@
+# Signal-driven bot config: ParraMacro -> TradeIdeas -> tickets
+
+parramacro:
+  base_url: http://localhost:5050        # override in .env via PARRAMACRO_BASE_URL
+  api_key_env: PARRAMACRO_API_KEY        # which env var holds the bearer token
+  poll_interval_seconds: 900             # 15 min; matches GeoRisk refresh cadence
+  request_timeout_seconds: 10
+  max_retries: 3
+  staleness_max_hours:                   # gate trades when underlying data is older
+    commodities: 36                      # commodity model is daily; 36h tolerance
+    georisk: 2                           # geo refreshes every 15m; 2h is generous
+
+risk:
+  starting_equity_fallback: 1000         # used if Alpaca account not reachable
+  risk_per_trade: 0.01                   # 1% of equity at the stop
+  max_position_fraction: 0.30            # one trade <= 30% of equity
+  max_open_positions: 3
+  daily_loss_kill_pct: 0.05              # halt new trades if equity down >5% on the day
+  per_symbol_cooldown_hours: 24          # don't re-enter same name within N hours
+
+execution:
+  mode: ticket_queue                     # "ticket_queue" (manual approve) or "auto"
+  paper_only: true                       # never touch live Alpaca account
+  ticket_dir: tickets                    # local directory for pending tickets
+  audit_log: results/signal_log.csv
+  notify_email: ""                       # leave blank to skip email; wire up later
+
+policies:
+  - name: gold_directional
+    enabled: true
+    commodity: gold
+    symbol: GLD                          # ETF traded on Alpaca
+    fan_horizon: nearest                 # use nearest-quarter fan boundaries
+    long_threshold: p10                  # enter long when spot < p10
+    exit_threshold: p50                  # exit when spot reaches p50
+    stop_band: p2_5                      # stop at p2_5
+    long_only: true                      # safe default for $1k account
