@@ -227,3 +227,32 @@ class ParraMacroClient:
                 f"{series} is {age_h:.1f}h old (max {max_hours}h)"
             )
         return as_of
+
+    def assert_forecast_fresh(
+        self,
+        forecast: dict[str, Any],
+        max_hours: float,
+    ) -> datetime:
+        """Check the forecast's own model-fit timestamp.
+
+        More reliable than /api/v1/health for commodity freshness because
+        it reads from the same data the forecast itself was generated
+        from. Uses summary.fit_at, which is the timestamp of the SARIMAX
+        + GARCH fit that produced this fan.
+        """
+        summary = forecast.get("summary") or {}
+        ts = summary.get("fit_at")
+        if not ts:
+            commodity = forecast.get("commodity", "?")
+            raise StaleDataError(
+                f"{commodity} forecast has no summary.fit_at "
+                f"(fit may have errored or never run)"
+            )
+        as_of = self.parse_iso(ts)
+        age_h = (datetime.now(timezone.utc) - as_of).total_seconds() / 3600
+        if age_h > max_hours:
+            commodity = forecast.get("commodity", "?")
+            raise StaleDataError(
+                f"{commodity} fit is {age_h:.1f}h old (max {max_hours}h)"
+            )
+        return as_of

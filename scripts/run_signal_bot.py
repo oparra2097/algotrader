@@ -70,9 +70,14 @@ def main() -> int:
     )
 
     # freshness gate
+    # Note: /health.commodities currently has a reporter bug that says null
+    # even when the cache is populated. We gate commodity policies on the
+    # forecast's own summary.fit_at instead (see assert_forecast_fresh).
     try:
         health = client.health()
         for series, max_h in pm_cfg["staleness_max_hours"].items():
+            if series == "commodities":
+                continue  # checked per-policy on the forecast itself
             client.assert_fresh(series, max_h, health)
     except StaleDataError as e:
         audit.append("stale_data_skip", detail=str(e))
@@ -105,6 +110,16 @@ def main() -> int:
             audit.append("forecast_fetch_fail",
                          source=pol["name"], symbol=pol["symbol"], detail=str(e))
             print(f"[error] {pol['name']}: {e}")
+            continue
+
+        # per-policy freshness check on the forecast's own fit_at
+        try:
+            commodity_max_h = pm_cfg["staleness_max_hours"].get("commodities", 36)
+            client.assert_forecast_fresh(forecast, max_hours=commodity_max_h)
+        except StaleDataError as e:
+            audit.append("stale_forecast_skip",
+                         source=pol["name"], symbol=pol["symbol"], detail=str(e))
+            print(f"[skip stale] {pol['name']}: {e}")
             continue
 
         idea = commodity_directional(
