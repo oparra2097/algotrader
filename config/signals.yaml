@@ -35,3 +35,10 @@ policies:
     exit_threshold: p50                  # exit when spot reaches p50 (median)
     stop_band: p2_5                      # stop at p2_5
     long_only: true                      # safe default for $1k account
+    execution:
+      mode: direction_only               # "direction_only" derives stop/target from venue ATR;
+                                         # "model_levels" uses parramacro's absolute fan boundaries
+      atr_period: 14
+      atr_stop_multiplier: 2.0
+      target_r_multiple: 3.0
+      atr_lookback_days: 60

@@ -137,6 +137,48 @@ def main() -> int:
             print(f"[no signal] {pol['name']} (spot={forecast.get('spot')})")
             continue
 
+        # If the policy is in direction_only mode, discard the model-frame
+        # stop/target and re-derive them from the venue's own ATR. This
+        # decouples signal generation (parramacro frame) from execution
+        # (Alpaca / GLD frame).
+        exec_cfg = pol.get("execution", {})
+        exec_mode = exec_cfg.get("mode", "direction_only")
+        if exec_mode == "direction_only" and idea.side in ("buy", "sell"):
+            from src.execution.direction_only_sizing import compute_levels
+            direction = "long" if idea.side == "buy" else "short"
+            levels = compute_levels(
+                symbol=idea.symbol,
+                direction=direction,
+                equity=state.equity,
+                risk_per_trade=cfg["risk"]["risk_per_trade"],
+                max_position_fraction=cfg["risk"]["max_position_fraction"],
+                atr_period=exec_cfg.get("atr_period", 14),
+                atr_stop_multiplier=exec_cfg.get("atr_stop_multiplier", 2.0),
+                target_r_multiple=exec_cfg.get("target_r_multiple", 3.0),
+                atr_lookback_days=exec_cfg.get("atr_lookback_days", 60),
+            )
+            if levels is None:
+                audit.append("direction_only_sizing_fail",
+                             source=idea.source, symbol=idea.symbol,
+                             detail="venue bars unavailable or ATR window short")
+                print(f"[error] {pol['name']}: could not size {idea.symbol} "
+                      f"from venue data")
+                continue
+            # Preserve model-frame numbers in metadata for audit / replay
+            idea.metadata["model_spot"] = idea.metadata.get("spot")
+            idea.metadata["model_stop"] = idea.stop_price
+            idea.metadata["model_target"] = idea.target_price
+            idea.metadata["spot"] = levels.spot
+            idea.metadata["atr"] = levels.atr
+            idea.metadata["mode"] = "direction_only"
+            idea.stop_price = levels.stop_price
+            idea.target_price = levels.target_price
+            idea.rationale += (
+                f" | venue {idea.symbol}: spot={levels.spot:.2f} "
+                f"ATR={levels.atr:.2f} stop={levels.stop_price:.2f} "
+                f"target={levels.target_price:.2f}"
+            )
+
         result = evaluate(idea, gate_cfg, state)
         audit.append("gate_decision", source=idea.source, symbol=idea.symbol,
                      side=idea.side,

@@ -130,6 +130,8 @@ policies:
     exit_threshold: p50
     stop_band: p2_5
     long_only: true
+    execution:
+      mode: model_levels        # tests assert against parramacro fan numbers
 """
 
 
