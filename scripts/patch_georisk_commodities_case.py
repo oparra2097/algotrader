@@ -33,6 +33,7 @@ NEW = """    raw = (request.args.get('commodity') or '').strip()
     if not raw:
         return jsonify({'error': 'missing_commodity'}), 400
     # case-insensitive match -> canonical mixed-case TICKERS key
+    from backend.data_sources.commodity_models import TICKERS
     name = next((k for k in TICKERS if k.lower() == raw.lower()), None)
     if name is None:
         return jsonify({
@@ -67,13 +68,6 @@ def main(argv: list[str]) -> int:
 
     new_src = src.replace(OLD, NEW)
 
-    tickers_imported = (
-        "TICKERS" in src
-        and any(line.strip().startswith(("from ", "import "))
-                and "TICKERS" in line
-                for line in src.splitlines())
-    )
-
     backup = Path(str(target) + ".bak")
     backup.write_text(src)
     target.write_text(new_src)
@@ -87,19 +81,6 @@ def main(argv: list[str]) -> int:
     for line in NEW.splitlines():
         print(f"+ {line}")
     print()
-
-    if not tickers_imported:
-        print("=" * 60)
-        print("ACTION REQUIRED: TICKERS may not be imported in this file.")
-        print("Add this near the top with the other imports:")
-        print()
-        print("    from backend.data_sources.commodity_models import TICKERS")
-        print()
-        print("(adjust the path if TICKERS lives elsewhere in your codebase).")
-        print("Verify with:")
-        print(f"    grep -n 'TICKERS' {target}")
-        print("=" * 60)
-        print()
 
     georisk_root = target.parent.parent.parent
     print("Next:")
