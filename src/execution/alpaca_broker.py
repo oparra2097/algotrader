@@ -96,9 +96,14 @@ class AlpacaPaperBroker:
         )
 
     def close_position(self, symbol: str, dry_run: bool = False) -> dict[str, Any]:
+        # Alpaca's DELETE /v2/positions/{symbol} treats slashes in the
+        # symbol as URL path separators - 'ETH/USD' becomes a 404.
+        # The no-slash form ('ETHUSD') works for crypto and is a no-op
+        # for equities (no slash to strip).
+        api_symbol = symbol.replace("/", "")
         if dry_run:
-            return {"dry_run": True, "close": symbol}
-        order = self.client.close_position(symbol)
+            return {"dry_run": True, "close": api_symbol}
+        order = self.client.close_position(api_symbol)
         return _to_json_safe(
             order.model_dump() if hasattr(order, "model_dump") else dict(order)
         )
