@@ -1,0 +1,35 @@
+# Donchian-on-ETH live runner config.
+
+strategy:
+  name: donchian_live
+  symbol: ETH/USD                  # Alpaca crypto symbol (slash form)
+  data_symbol: ETH-USD             # yfinance ticker for daily bars
+  history_days: 250                # need enough for 100d MA + buffer
+
+  entry_lookback: 20               # 20-day Donchian breakout entry
+  exit_lookback: 10                # 10-day Donchian breakdown exit
+  atr_period: 14
+  atr_stop_multiplier: 2.0
+  target_r_multiple: 3.0
+  trend_filter_ma: 100             # only long when above 100d SMA
+
+  vol_target_daily: 0.01           # target ~1% daily portfolio vol
+  vol_lookback: 20
+
+risk:
+  starting_equity_fallback: 1000   # used only if Alpaca is unreachable
+  risk_per_trade: 0.01
+  max_position_fraction: 1.0       # ETH is a single instrument; allow full deploy
+  max_open_positions: 3            # shared cap across all bots
+  daily_loss_kill_pct: 0.05
+  per_symbol_cooldown_hours: 12    # ETH trades 24/7 - shorter cooldown ok
+
+execution:
+  mode: ticket_queue               # "ticket_queue" or "auto" (see run_eth_bot.py)
+  paper_only: true
+  ticket_dir: tickets
+  audit_log: results/eth_log.csv
+
+costs:                             # informational only; broker handles real fees
+  fee_per_side: 0.0025
+  slippage: 0.0005

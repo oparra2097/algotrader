@@ -46,18 +46,46 @@ class AlpacaPaperBroker:
             open_positions=open_pos,
         )
 
-    def place_market_order(self, symbol: str, qty: float, side: str,
-                           dry_run: bool = False) -> dict[str, Any]:
+    def place_market_order(
+        self,
+        symbol: str,
+        side: str,
+        qty: float | None = None,
+        notional: float | None = None,
+        dry_run: bool = False,
+    ) -> dict[str, Any]:
+        """Submit a market order. Supports stocks and crypto.
+
+        Symbol convention:
+          - Stocks: 'GLD', 'SPY', 'TSLA' -> DAY tif
+          - Crypto: 'ETH/USD', 'BTC/USD' (slash form) -> GTC tif
+
+        Either qty (units) or notional (dollars) must be specified.
+        Crypto supports fractional via either; stocks use qty (Alpaca
+        also supports notional for fractional stocks).
+        """
         from alpaca.trading.enums import OrderSide, TimeInForce
         from alpaca.trading.requests import MarketOrderRequest
 
+        if (qty is None) == (notional is None):
+            raise ValueError("specify exactly one of qty / notional")
+
+        is_crypto = "/" in symbol
         side_enum = OrderSide.BUY if side == "buy" else OrderSide.SELL
-        req = MarketOrderRequest(
-            symbol=symbol,
-            qty=qty,
-            side=side_enum,
-            time_in_force=TimeInForce.DAY,
-        )
+        # crypto markets are 24/7 -> GTC; equities -> DAY
+        tif = TimeInForce.GTC if is_crypto else TimeInForce.DAY
+
+        req_kwargs: dict[str, Any] = {
+            "symbol": symbol,
+            "side": side_enum,
+            "time_in_force": tif,
+        }
+        if qty is not None:
+            req_kwargs["qty"] = qty
+        else:
+            req_kwargs["notional"] = notional
+
+        req = MarketOrderRequest(**req_kwargs)
         if dry_run:
             return _to_json_safe(
                 {"dry_run": True, "request": req.model_dump()}
