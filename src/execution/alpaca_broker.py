@@ -59,12 +59,34 @@ class AlpacaPaperBroker:
             time_in_force=TimeInForce.DAY,
         )
         if dry_run:
-            return {"dry_run": True, "request": req.model_dump()}
+            return _to_json_safe(
+                {"dry_run": True, "request": req.model_dump()}
+            )
         order = self.client.submit_order(req)
-        return order.model_dump() if hasattr(order, "model_dump") else dict(order)
+        return _to_json_safe(
+            order.model_dump() if hasattr(order, "model_dump") else dict(order)
+        )
 
     def close_position(self, symbol: str, dry_run: bool = False) -> dict[str, Any]:
         if dry_run:
             return {"dry_run": True, "close": symbol}
         order = self.client.close_position(symbol)
-        return order.model_dump() if hasattr(order, "model_dump") else dict(order)
+        return _to_json_safe(
+            order.model_dump() if hasattr(order, "model_dump") else dict(order)
+        )
+
+
+def _to_json_safe(obj: Any) -> Any:
+    """Recursively convert UUID, datetime, Decimal, Enum, etc. to JSON-native.
+
+    The alpaca-py SDK puts UUID and datetime objects in its model_dump()
+    output. Plain json.dumps chokes on those; this helper normalizes
+    everything to strings/numbers/bools/lists/dicts before serialization.
+    """
+    if obj is None or isinstance(obj, (str, int, float, bool)):
+        return obj
+    if isinstance(obj, dict):
+        return {str(k): _to_json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple, set)):
+        return [_to_json_safe(v) for v in obj]
+    return str(obj)

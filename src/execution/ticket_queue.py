@@ -83,7 +83,9 @@ class TicketQueue:
             d["notes"] = notes
         if fill is not None:
             d["fill"] = fill
-        path.write_text(json.dumps(d, indent=2))
+        # default=str handles UUID, datetime, Decimal, etc. that the alpaca
+        # SDK puts in order-response dicts.
+        path.write_text(json.dumps(d, indent=2, default=str))
 
 
 def _ticket_from_dict(d: dict[str, Any]) -> Ticket:
