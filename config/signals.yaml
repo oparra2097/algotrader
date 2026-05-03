@@ -6,9 +6,13 @@ parramacro:
   poll_interval_seconds: 900             # 15 min; matches GeoRisk refresh cadence
   request_timeout_seconds: 10
   max_retries: 3
-  staleness_max_hours:                   # gate trades when underlying data is older
+  # Per-series staleness limits. Only series listed in a policy's
+  # `requires:` block actually gate that policy. The runner ignores
+  # any entry no enabled policy needs.
+  staleness_max_hours:
     commodities: 36                      # commodity model is daily; 36h tolerance
-    georisk: 2                           # geo refreshes every 15m; 2h is generous
+    georisk: 6                           # bumped from 2h - parramacro's geo cadence drifts
+    macro_model: 720                     # macro model fits daily; 30d tolerance
 
 risk:
   starting_equity_fallback: 1000         # used if Alpaca account not reachable
@@ -28,6 +32,7 @@ execution:
 policies:
   - name: gold_directional
     enabled: true
+    requires: [commodities]              # which parramacro series this policy needs
     commodity: Gold                      # mixed-case, matches ParraMacro TICKERS
     symbol: GLD                          # ETF traded on Alpaca
     fan_horizon: nearest                 # use Q+1 fan boundaries

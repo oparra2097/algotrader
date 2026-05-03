@@ -69,19 +69,39 @@ def main() -> int:
         max_retries=pm_cfg["max_retries"],
     )
 
-    # freshness gate
-    # Note: /health.commodities currently has a reporter bug that says null
-    # even when the cache is populated. We gate commodity policies on the
-    # forecast's own summary.fit_at instead (see assert_forecast_fresh).
+    # Freshness is per-policy. Each policy declares the parramacro series
+    # it depends on via `requires:` in config; we only check those.
+    # Commodities is checked per-policy via the forecast's own
+    # summary.fit_at, not here.
     try:
         health = client.health()
-        for series, max_h in pm_cfg["staleness_max_hours"].items():
-            if series == "commodities":
-                continue  # checked per-policy on the forecast itself
+    except Exception as e:
+        audit.append("health_fetch_fail", detail=str(e))
+        print(f"[error] /health unreachable: {e}")
+        return 1
+
+    enabled_policies = [p for p in cfg["policies"] if p.get("enabled", True)]
+    needed_series: set[str] = set()
+    for pol in enabled_policies:
+        for s in pol.get("requires", []):
+            needed_series.add(s)
+    # commodities is checked per-policy below; skip it here even if listed
+    needed_series.discard("commodities")
+
+    skip_run = False
+    for series in needed_series:
+        max_h = pm_cfg["staleness_max_hours"].get(series)
+        if max_h is None:
+            audit.append("missing_staleness_config", detail=series)
+            continue
+        try:
             client.assert_fresh(series, max_h, health)
-    except StaleDataError as e:
-        audit.append("stale_data_skip", detail=str(e))
-        print(f"[skip] stale data: {e}")
+        except StaleDataError as e:
+            audit.append("stale_data_skip", detail=str(e))
+            print(f"[skip] stale data: {e}")
+            skip_run = True
+            break
+    if skip_run:
         return 0
 
     state = get_portfolio_state(cfg, audit)
