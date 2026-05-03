@@ -10,7 +10,11 @@ parramacro:
   # `requires:` block actually gate that policy. The runner ignores
   # any entry no enabled policy needs.
   staleness_max_hours:
-    commodities: 36                      # commodity model is daily; 36h tolerance
+    # parramacro commodity refit is on a monthly cron (1st of month 07:00 UTC),
+    # so 36h was too tight - bot would block from day 2 onward. 45d covers
+    # one full cycle plus margin. Spot/nowcast still updates within the
+    # forecast response itself, so direction is current even if fan is older.
+    commodities: 1080                    # 45 days
     georisk: 6                           # bumped from 2h - parramacro's geo cadence drifts
     macro_model: 720                     # macro model fits daily; 30d tolerance
 
